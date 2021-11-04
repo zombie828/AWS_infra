@@ -1,0 +1,94 @@
+[root@linux1 ~]# vi ./mem_check.sh
+#!/bin/bash
+#
+Date=`date +%Y_%m_%d`
+MEMLOG=Memcheck_${Date}_${HOSTNAME}.log
+
+function Memory() {
+sum1=0
+sum3=0
+
+for cnt in {1..4..1}
+do
+        memused1=`free | grep ^Mem | awk '{print $3}'`
+        swapused1=`free | grep ^Swap | awk '{print $3}'`
+        add1=`expr $memused1 + $sum1`
+        sum1=$add1
+        add3=`expr $swapused1 + $sum3`
+        sum3=$add3
+        sleep 1
+done
+memtotal=`free | grep ^Mem | awk '{print $2}'`
+swaptotal=`free | grep ^Swap | awk '{print $2}'`
+memtotal2=$((memtotal*4))
+swaptotal2=$((swaptotal*4))
+
+actual=$((100*sum1/memtotal2))
+swap=$((100*sum3/swaptotal2))
+TM=`free -m | grep ^Mem | awk '{print $2}'`
+TSM=`free -m | grep ^Swap | awk '{print $2}'`
+
+cat /proc/meminfo | egrep -i 'Memtotal|MemFree|Cached|Swap' | sed 's/: */ /g' | awk '{ for(i=1;i<=NF;i++) { if($i ~ /[0-9]/) { printf "%s  \t\t\t", $(i-1); printf "%.1f MB\n", $i/1024 }}}'    > ${MEMLOG}
+echo "" >> ${MEMLOG}
+echo -e "Total Actual Memory : ${TM}MB"         >> ${MEMLOG}
+echo -e "Used        Momery : ${actual}%\n"     >> ${MEMLOG}
+echo -e "Total Swap   Memory : ${TSM}MB"        >> ${MEMLOG}
+echo -e "Used  Swap   Memory : ${swap}%"        >> ${MEMLOG}
+}
+
+Memory
+
+User_Name="ec2-user"
+Server_Name="13.125.129.255"
+tar -czpf ~/Security_check_${Date}_${HOSTNAME}.tar.gz ./*.log
+Log_File=~/*.tar.gz
+scp -i ~/.ssh/my_key.pem ${Log_File} ${User_Name}@${Server_Name}:~/ > /dev/null
+
+
+[root@linux1 ~]# vi ~/Playbook_Sample_4.yml
+---
+- hosts: all
+  gather_facts: no
+  tasks:
+    - name: ShellScripts Copy
+      copy: src=~/security_check.sh dest=~/security_check.sh
+    - name: Change Script file Permissions
+      file: dest=~/security_check.sh mode=700
+    - name: Run The Script File
+      shell: ~/security_check.sh
+
+
+
+[root@linux2 ~]# ssh-keygen -t rsa
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa): ¡°enter¡±
+Enter passphrase (empty for no passphrase): ¡°enter¡±
+Enter same passphrase again: ¡°enter¡±
+Your identification has been saved in /root/.ssh/id_rsa.
+Your public key has been saved in /root/.ssh/id_rsa.pub.
+The key fingerprint is:
+SHA256:LmJ15gMjGzd9i0709PQbhHOc5IH2GyVO+ByiMZemDMg root@linux2
+The key's randomart image is:
+
+[root@linux2 ~]# chmod 600 ~/.ssh/*
+[root@linux2 ~]# scp ~/.ssh/id_rsa.pub root@192.168.1.100:~/.ssh/linux2_authorized_keys
+
+
+[root@linux3 ~]# ssh-keygen -t rsa
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa): ¡°enter¡±
+Enter passphrase (empty for no passphrase): ¡°enter¡±
+Enter same passphrase again: ¡°enter¡±
+Your identification has been saved in /root/.ssh/id_rsa.
+Your public key has been saved in /root/.ssh/id_rsa.pub.
+The key fingerprint is:
+SHA256:LmJ15gMjGzd9i0709PQbhHOc5IH2GyVO+ByiMZemDMg root@linux3
+The key's randomart image is:
+
+[root@Network ~]# chmod 600 ~/.ssh/*
+[root@Network ~]# scp ~/.ssh/id_rsa.pub root@192.168.1.100:~/.ssh/linux3_authorized_keys
+
+[root@linux1 ~]# vi /etc/ssh/sshd_config
+47 AuthorizedKeysFile      .ssh/linux2_authorized_keys        .ssh/linux3_authorized_keys
+
+[root@linux1 ~]# systemctl restart sshd

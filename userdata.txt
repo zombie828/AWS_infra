@@ -1,0 +1,112 @@
+https://nuggy875.tistory.com/73 구글 드라이브로 wget 하는법
+
+https://drive.google.com/file/d/13SqbJkaZcModTsoa7bKKwuUTAwK7xVdk/view?usp=sharing
+
+wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=13SqbJkaZcModTsoa7bKKwuUTAwK7xVdk' -O my_page
+
+
+
+--------------------------------유저데이터 부분(Web Server)-------------------
+#!/bin/bash
+sudo yum update
+#Install Util
+sudo yum -y install unzip
+#Install apache php mariadb
+sudo yum install -y http*
+sudo amazon-linux-extras install -y php7.2
+#Set Environment
+#Download Source Code
+sudo wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1oAM4Q76Gx5Kzir6m5YuAZRPDo0tktvug' -O my_page
+sudo unzip my_page -d /var/www/html/
+sudo systemctl restart httpd
+sudo systemctl enable httpd
+#Prometheus repository add
+sudo tee /etc/yum.repos.d/prometheus.repo <<EOF 
+[prometheus]
+name=prometheus
+baseurl=https://packagecloud.io/prometheus-rpm/release/el/7/x86_64
+repo_gpgcheck=1
+enabled=1
+gpgkey=https://packagecloud.io/prometheus-rpm/release/gpgkey
+       https://raw.githubusercontent.com/lest/prometheus-rpm/master/RPM-GPG-KEY-prometheus-rpm
+gpgcheck=1
+metadata_expire=300
+EOF
+#Prometheus agent install
+sudo yum -y install node_exporter
+sudo systemctl start node_exporter
+sudo systemctl enable node_exporter
+
+
+--------------------------------유저데이터 부분(Bastion Host)-------------------
+#!/bin/bash
+sudo yum update
+#Ansible install
+sudo amazon-linux-install -y ansible2
+#Prometheus repository add
+sudo tee /etc/yum.repos.d/prometheus.repo <<EOF 
+[prometheus]
+name=prometheus
+baseurl=https://packagecloud.io/prometheus-rpm/release/el/7/x86_64
+repo_gpgcheck=1
+enabled=1
+gpgkey=https://packagecloud.io/prometheus-rpm/release/gpgkey
+       https://raw.githubusercontent.com/lest/prometheus-rpm/master/RPM-GPG-KEY-prometheus-rpm
+gpgcheck=1
+metadata_expire=300
+EOF
+#Prometheus server install
+sudo yum -y install prometheus2
+sudo systemctl start prometheus2
+sudo systemctl enable prometheus2
+#Grafana repository add
+sudo tee /etc/yum.repos.d/grafana.repo <<EOF
+[grafana]
+name=grafana
+baseurl=https://packages.grafana.com/oss/rpm
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+EOF
+#Grafana install
+sudo yum install grafana
+sudo systemctl start grafana-server
+sudo systemctl enable grafana-server
+#pem key insert
+sudo tee ~/.ssh/my_key.pem <<EOF
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpQIBAAKCAQEAgkUKOTUP4UAkEcmBof1IW1OoNALvN5uys9GSrMYdvbm7n6Yc
+ChkVLjsmLGXpFHKVqYTUtnSn767b5tdenZKBJAUhili1WvvspQIBJ8PON+kZtf96
+WLjUiO+WlpLxGxkSZ04ke7h7lCwSt3VzMj/T6iQXWoktTy2swOuHVc6DQyqwcTor
+lfgk8VAEa9AJBID2yJJda/i4G1A5+tqTPWHC9s/e2Es029JZVqKMvH7Hr8OtvuhT
+aOSQG2jluPY+R1YozvLZlWtES4LJ3ZQt1TvvAQlklO41yZqvXGY9jtOBHywTZs0I
+mkMzlw6jC+/JY26O9PS69XEm2tz+E2HtNSKD/QIDAQABAoIBAFig+C+rtj4eEWw4
+mIXJeO0JoaqhRHek6pQExbHeqGVodApOTU1he1OU0ofqXgWXX9ORl9b6zzb21I3d
+gXXbMxl6lDM330sjkwFAt+CCC09mvCNiya6LMa5osx+GoZs6F5dJRvEVtp48zg8b
+TWCmpFrsaychpT31aU9n7w+mDRAohNC2KTrlJK0sZYoGNj9OATSj4Rbb0jpnzwNh
+5tsjaMBXBob6CaFrKFDOBzVbdWCGX5yhrql5Pw0E5P1IJXrT6uVrVN/X6sz5v3FJ
+yj9U6l3g+oRmvL1VyEXPcwLvRzU4OiPEEB3V1qdnx95IHZb/2ReCkVMtCitQaDWv
+V2vZpFECgYEAzfPA8E4aqn/cEY4WsqHqqFXMSc3IAGM1gwPRoX39Jx+5Ft+4spMi
+zCpTwYrpzfQX/zXMKYMJLM15FAtCd13alzot3+e3W7AM6NkMulL3II0hVIohW8gC
+8Z9ZwNwxr9iVFxLlbk8LAeQ1Lfq/HlOhFK4A7HL6Hl/W81WFZZcC4nMCgYEAoe0X
+5CpRRkBkSxwfoCpjaUe6xHwmVLNieYk657ShylMPTQAf87E4vUODRUKy+eTZizJo
+F7ycY8AxKxJsf4pIBgKaJ2KfehFRYkZdcwsI+IKV3Z/Rdg79hDYgTUhbKY2x+WNe
++s7q0clF5/QL7HNUCKs+/fJux9pLQ4BK64vts88CgYEAiYLNOiYMK/c/CwGiKhdu
+RIM06bpaZdfX7Ohp2bfzhWHrBVjPS3xuaX+BeOK1hWwLcb2L2dPCFoYC5900vdqO
+jxardqqShMehdv8lPmsS0kspC/dGmq+LN6U8GkdrbYvg0A0v310rblHfKBoZ7bfM
+/6/Gshl64zj+nm5lqRUROf0CgYEAiZqfO/FOQgIEeOO8aHK9KkGfkMvkEwSiQaAB
+49fXycUN8qSRgpjvG79ctaX5zGzTBfxfAxTwXcB8yBqPA09y51Ccya2A0s4WuAoN
+7e7Jv83RJ5Zh/Q6+F/WbO7GqbsSQItt0YnUmjgKaGoSFAXn8RqWoEUxNIh766LEE
+eejepncCgYEAxtuxbFYEETF5qU4EeyDiS/w8L0UQ240HoQ1EaS4jY/+AmxDX77cM
+/9MmmE+Pogm7DHPgY9Z7LQml220YyDfSo5Mplt5Ai09VJOQjt3MjUAbbrGf/3ebj
+wWSUNNfn7bOSEQHQiCQJ/F/lia6xCvEw+XzsRoz5UPZfSiw0F1ZgbYA=
+-----END RSA PRIVATE KEY-----
+EOF
+#mariadb install
+sudo yum install -y mariadb*
+sudo systemctl restart mariadb
+sudo systemctl enable mariadb
+
