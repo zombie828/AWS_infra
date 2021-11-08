@@ -1,0 +1,518 @@
+Parameters:
+  kimkyohyun:
+    Description: KeyPair
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: KeyPair
+
+  DBID: 
+    Type: String
+    Default: "admin"
+
+  DBPW:
+    Type: String 
+    Default: "test1234"
+
+Resources:
+  WEBVPC:                    # create vpc
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 10.0.0.0/16
+     EnableDnsSupport: true
+     EnableDnsHostnames: true
+     Tags:
+        - Key: Name
+          Value: TEST-VPC
+  
+  DBVPC:                    # create vpc
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 11.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: DB-VPC
+    
+  DBPrivateRT:              # Create PublicRoutetable 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DBVPC
+      Tags:
+        - Key: Name
+          Value: DB-Private-RT
+  
+  WEBDBPeering:
+    Type: AWS::EC2::VPCPeeringConnection
+    Properties:
+      PeerVpcId: !Ref WEBVPC
+      VpcId: !Ref DBVPC
+  
+  DefaultDBPrivateRoute:      
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref DBPrivateRT
+      DestinationCidrBlock: 10.0.0.0/16
+      VpcPeeringConnectionId: !Ref WEBDBPeering
+
+  DBPrivateSNA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DBVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 11.0.0.0/24
+      Tags:
+        - Key: Name
+          Value: DB-Private-SN-A
+  
+  DBPrivateSNC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DBVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 11.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: DB-Private-SN-C
+  
+  DBPrivateSNARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DBPrivateRT
+      SubnetId: !Ref DBPrivateSNA
+
+  DBPrivateSNCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DBPrivateRT
+      SubnetId: !Ref DBPrivateSNC
+
+  IGW:                     # create Inernetgateway
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TEST-IGW
+
+  IGWAttachment:          # assign IGW to WEBVPC
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IGW
+      VpcId: !Ref WEBVPC
+
+  WEBPublicRT:              # Create PublicRoutetable 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WEBVPC
+      Tags:
+        - Key: Name
+          Value: VPC-Public-RT
+
+  DefaultPublicRoute:      
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref WEBPublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+
+  WEBPrivateRT:           # Create PrivateRoutetable 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WEBVPC
+      Tags:
+        - Key: Name
+          Value: WEB-Private-RT
+
+  WEBPrivateRT2:          # Create PrivateRoutetable 
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref WEBVPC
+      Tags:
+        - Key: Name
+          Value: WEB-Private-RT2
+
+  DefaultPrivateRoute:    # Set PrivateRoutetable 
+    Type: AWS::EC2::Route
+    DependsOn: NatInstanceA
+    Properties:
+      RouteTableId: !Ref WEBPrivateRT
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NatInstanceA
+
+  DefaultPrivateRouteDB1:    # Set PrivateRoutetable 
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref WEBPrivateRT
+      DestinationCidrBlock: 11.0.0.0/16
+      VpcPeeringConnectionId: !Ref WEBDBPeering
+
+  DefaultPrivateRouteC:   # Set PrivateRoutetable
+    Type: AWS::EC2::Route
+    DependsOn: NatInstanceA
+    Properties:
+      RouteTableId: !Ref WEBPrivateRT2
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NatInstanceC
+
+  DefaultPrivateRouteDB:   # Set PrivateRoutetable
+    Type: AWS::EC2::Route
+    DependsOn: NatInstanceA
+    Properties:
+      RouteTableId: !Ref WEBPrivateRT2
+      DestinationCidrBlock: 11.0.0.0/16
+      VpcPeeringConnectionId: !Ref WEBDBPeering
+
+  WEBPublicSNA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WEBVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.0.0/24
+      Tags:
+        - Key: Name
+          Value: WEB-Public-SN-A
+
+  WEBPublicSNC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WEBVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: WEB-Public-SN-C
+
+  WEBPrivateSNA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WEBVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: WEB-Private-SN-A
+  
+  WEBPrivateSNC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref WEBVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: WEB-Private-SN-C
+
+  WEBPublicSNARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WEBPublicRT
+      SubnetId: !Ref WEBPublicSNA
+
+  WEBPublicSNCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WEBPublicRT
+      SubnetId: !Ref WEBPublicSNC
+
+  WEBPrivateSNARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WEBPrivateRT
+      SubnetId: !Ref WEBPrivateSNA
+
+  WEBPrivateSNCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref WEBPrivateRT2
+      SubnetId: !Ref WEBPrivateSNC
+
+  WEBSecurityGroup:                             # create security group
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22 and ICMP
+      VpcId: !Ref WEBVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+
+  NATSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable custom tcp custom udp
+      VpcId: !Ref WEBVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '0'
+        ToPort: '1023'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: '0'
+        ToPort: '1023'
+        CidrIp: 0.0.0.0/0
+
+  NatInstanceA:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0e4a9ad2eb120e054
+      KeyName: !Ref kimkyohyun
+      Tags:
+        - Key: Name
+          Value: NAT-Instance-A
+      SourceDestCheck: 'false'
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WEBPublicSNA
+          GroupSet:
+          - !Ref NATSecurityGroup
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            yum -y update
+            echo 1 > /proc/sys/net/ipv4/ip_forward
+            echo 0 > /proc/sys/net/ipv4/conf/eth0/send_redirects
+            /sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
+            /sbin/iptables-save > /etc/sysconfig/iptables
+            mkdir -p /etc/sysctl.d/
+            cat <<EOF > /etc/sysctl.d/nat.conf
+            net.ipv4.ip_forward = 1
+            net.ipv4.conf.eth0.send_redirects = 0
+            EOF 
+
+  NatInstanceC:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0e4a9ad2eb120e054
+      KeyName: !Ref kimkyohyun
+      Tags:
+        - Key: Name
+          Value: NAT-Instance-C
+      SourceDestCheck: 'false'
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WEBPublicSNC
+          GroupSet:
+          - !Ref NATSecurityGroup
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            #!/bin/bash
+            sudo yum -y update
+            sudo echo 1 > /proc/sys/net/ipv4/ip_forward
+            sudo echo 0 > /proc/sys/net/ipv4/conf/eth0/send_redirects
+            sudo /sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
+            sudo /sbin/iptables-save > /etc/sysconfig/iptables
+            sudo mkdir -p /etc/sysctl.d/
+            sudo cat <<EOF > /etc/sysctl.d/nat.conf
+            net.ipv4.ip_forward = 1
+            net.ipv4.conf.eth0.send_redirects = 0
+            EOF 
+
+  Ansible:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-0e4a9ad2eb120e054
+      KeyName: !Ref kimkyohyun
+      Tags:
+        - Key: Name
+          Value: Ansible-A
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WEBPublicSNA
+          GroupSet:
+          - !Ref WEBSecurityGroup
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64:
+          !Sub | 
+            #!/bin/bash
+            sudo yum -y install ansible
+            sudo amazon-linux-extras install -y ansible2
+  
+  WEB1:
+    Type: AWS::EC2::Instance
+    Properties: 
+      InstanceType: t2.micro
+      ImageId: ami-0e4a9ad2eb120e054
+      KeyName: !Ref kimkyohyun
+      Tags:
+        - Key: Name
+          Value: WEB-PriA
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WEBPrivateSNA
+          GroupSet:
+          - !Ref WEBSecurityGroup
+      UserData:
+        Fn::Base64:
+          !Sub | 
+            #!/bin/bash
+            sudo yum update
+            sudo yum -y install unzip
+            sudo yum install -y http*
+            sudo yum install -y php
+            sudo wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1W0WD9W3cYn2O8pDCQ84ginR4CqoXWFe4' -O my_page.zip
+            sudo unzip my_page -d /var/www/html/
+            sudo systemctl restart httpd
+
+  WEB2:
+    Type: AWS::EC2::Instance
+    Properties: 
+      InstanceType: t2.micro
+      ImageId: ami-0e4a9ad2eb120e054
+      KeyName: !Ref kimkyohyun
+      Tags:
+        - Key: Name
+          Value: WEB-PriC
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref WEBPrivateSNC
+          GroupSet:
+          - !Ref WEBSecurityGroup
+      UserData:
+        Fn::Base64:
+          !Sub | 
+            #!/bin/bash
+            sudo yum update
+            sudo yum -y install unzip
+            sudo yum install -y http*
+            sudo yum install -y php
+            sudo wget --no-check-certificate 'https://docs.google.com/uc?export=download&id=1W0WD9W3cYn2O8pDCQ84ginR4CqoXWFe4' -O my_page.zip
+            sudo unzip my_page -d /var/www/html/
+            sudo systemctl restart httpd
+
+  WEBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties: 
+      Name: WEBTargetGroup
+      Port: 80
+      Protocol: "HTTP"
+      VpcId: !Ref WEBVPC
+      Targets:
+        - Id: !Ref WEB1
+        - Id: !Ref WEB2
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: ApplicationLoadBalancer
+      Subnets:
+        - !Ref WEBPublicSNA
+        - !Ref WEBPublicSNC
+      SecurityGroups:
+        - !Ref WEBSecurityGroup
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WEBTargetGroup
+
+  WEBLaunchConfiguration:           # LaunchConfiguration 생성 
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-0e4a9ad2eb120e054
+      InstanceType: t2.micro
+      KeyName: !Ref kimkyohyun
+      LaunchConfigurationName: WEBAutoScaling
+      SecurityGroups: 
+        - !Ref WEBSecurityGroup
+    
+  ASG:          # Create AutoScalingGroup 
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: WEBASG
+      VPCZoneIdentifier:
+        - !Ref WEBPrivateSNA
+        - !Ref WEBPrivateSNC
+      Cooldown: 10
+      LaunchConfigurationName: !Ref WEBLaunchConfiguration
+      MaxSize: 4
+      MinSize: 2
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref WEBTargetGroup
+      Tags:
+        - Key: Name
+          Value: WEB-ASG
+          PropagateAtLaunch: true
+    
+  ASGPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref ASG
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50
+
+  DBSecurityGroup:                             # create security group
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable Mysql Aurora
+      VpcId: !Ref DBVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+        CidrIp: 10.0.0.0/0
+
+  DBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: "Subnet Group for Mariadb"
+      DBSubnetGroupName: DBSubnetGroup
+      SubnetIds:
+        - !Ref DBPrivateSNA
+        - !Ref DBPrivateSNC
+
+  RDS:
+    Type: AWS::RDS::DBInstance
+    Properties: 
+      DBName: RDS
+      MasterUsername: !Ref DBID
+      MasterUserPassword: !Ref DBPW
+      Engine: MariaDB
+      DBInstanceClass: db.t2.micro
+      StorageType: gp2 
+      PubliclyAccessible: false
+      AllocatedStorage: "10"
+      DBInstanceIdentifier: WEBDB 
+      MultiAZ: false 
+      VPCSecurityGroups: 
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref  DBSubnetGroup
+
+  RDSReplica:
+    Type: AWS::RDS::DBInstance
+    DependsOn: RDS
+    Properties:
+      SourceDBInstanceIdentifier: !Ref RDS
+      DBInstanceIdentifier: WEBRDSReplica
+      DBInstanceClass: db.t2.micro
+      StorageType: gp2
+      PubliclyAccessible: false
+      VPCSecurityGroups: 
+        - !Ref DBSecurityGroup
+  Bucket:
+    Type: AWS::S3::Bucket 
+    Properties: 
+      BucketName: baeumeducationbucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls : false
